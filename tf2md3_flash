@@ -1,0 +1,62 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+  echo "USAGE: $0 /dev/ttyACM? firmware.bin" 1>&2
+  exit 1
+fi
+
+if [[ ! -f $2 ]]; then
+  echo "$2 does not exist" 1>&2
+  exit 1
+fi
+
+if [[ ! -a $1 ]]; then
+  echo "$1 does not exist" 1>&2
+  exit 1
+fi
+
+wait_ret(){
+  while read -t 1 retval; do
+    if [[ $retval == '00P' ]]; then return 1; fi
+    if [[ $retval == '01Q' ]]; then return 0; fi
+    if [[ $retval == '0Ee' ]]; then return 0; fi
+  done < $1
+  return 0
+}
+
+echo "Erasing flash..."
+stty -F $1 raw -echo
+echo '' > $1
+while read -t 1 ret < $1; do sleep 0; done
+
+wait_ret $1 & pid=$!
+echo '$FLASHERACEA' > $1
+wait $pid
+ret=$?
+if [[ $ret -ne 1 ]]; then
+  echo "Failed to erace flash ($ret)" 1>&2
+  exit 1
+fi
+
+wait_ret $1 & pid=$!
+echo '$FLASHERACEB' > $1
+wait $pid
+ret=$?
+if [[ $ret -ne 1 ]]; then
+  echo "Failed to erace flash ($ret)" 1>&2
+  exit 1
+fi
+
+echo "Flash eraced"
+sleep 2
+
+echo "Writing firmware..."
+cat <<EOD > /tmp/.samba_cmd.tmp
+flash 0x00100000 $2
+nvm 4
+EOD
+
+samba -i $1 --source=/tmp/.samba_cmd.tmp
+
+rm /tmp/.samba_cmd.tmp
+
