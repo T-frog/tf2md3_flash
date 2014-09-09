@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# -ne 2 ]; then
+if [ $# -lt 2 ]; then
   echo "USAGE: $0 /dev/ttyACM? firmware.bin" 1>&2
   exit 1
 fi
@@ -15,6 +15,11 @@ if [[ ! -a $1 ]]; then
   exit 1
 fi
 
+skip_erase=no
+if [ x$3 = "x--erased" ]; then
+  skip_erase=yes
+fi
+
 wait_ret(){
   while read -t 1 retval; do
     if [[ $retval == '00P' ]]; then return 1; fi
@@ -24,31 +29,38 @@ wait_ret(){
   return 0
 }
 
-echo "Erasing flash..."
-stty -F $1 raw -echo
-echo '' > $1
-while read -t 1 ret < $1; do sleep 0; done
 
-wait_ret $1 & pid=$!
-echo '$FLASHERACEA' > $1
-wait $pid
-ret=$?
-if [[ $ret -ne 1 ]]; then
-  echo "Failed to erace flash ($ret)" 1>&2
-  exit 1
+if [ x$skip_erase = "xno" ]; then
+  echo "Erasing flash..."
+  stty -F $1 raw -echo
+  echo '' > $1
+  while read -t 1 ret < $1; do sleep 0; done
+
+  wait_ret $1 & pid=$!
+  echo '$FLASHERACEA' > $1
+  wait $pid
+  ret=$?
+  if [[ $ret -ne 1 ]]; then
+    echo "Failed to erase flash ($ret)" 1>&2
+    echo "If the flash is already erased, please try " 1>&2
+    echo " $0 $1 $2 --erased" 1>&2
+    exit 1
+  fi
+
+  wait_ret $1 & pid=$!
+  echo '$FLASHERACEB' > $1
+  wait $pid
+  ret=$?
+  if [[ $ret -ne 1 ]]; then
+    echo "Failed to erase flash ($ret)" 1>&2
+    exit 1
+  fi
+
+  echo "Flash erased"
+  sleep 2
+else
+  echo "Flash erase skipped"
 fi
-
-wait_ret $1 & pid=$!
-echo '$FLASHERACEB' > $1
-wait $pid
-ret=$?
-if [[ $ret -ne 1 ]]; then
-  echo "Failed to erace flash ($ret)" 1>&2
-  exit 1
-fi
-
-echo "Flash eraced"
-sleep 2
 
 echo "Writing firmware..."
 cat <<EOD > /tmp/.samba_cmd.tmp
