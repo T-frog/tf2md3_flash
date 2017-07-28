@@ -21,11 +21,16 @@ if [ x$3 = "x--erased" ]; then
 fi
 
 wait_ret(){
-  while read -t 1 retval; do
+  while read -t 1.5 retval; do
     if [[ $retval == '00P' ]]; then return 1; fi
     if [[ $retval == '01Q' ]]; then return 0; fi
     if [[ $retval == '0Ee' ]]; then return 0; fi
   done < $1
+  return 0
+}
+wait_echo(){
+  sleep $1
+  echo $2 > $3
   return 0
 }
 
@@ -37,7 +42,7 @@ if [ x$skip_erase = "xno" ]; then
   while read -t 1 ret < $1; do sleep 0; done
 
   wait_ret $1 & pid=$!
-  echo '$FLASHERACEA' > $1
+  wait_echo 0.5 '$FLASHERACEA' $1 &
   wait $pid
   ret=$?
   if [[ $ret -ne 1 ]]; then
@@ -48,7 +53,7 @@ if [ x$skip_erase = "xno" ]; then
   fi
 
   wait_ret $1 & pid=$!
-  echo '$FLASHERACEB' > $1
+  wait_echo 0.5 '$FLASHERACEB' $1 &
   wait $pid
   ret=$?
   if [[ $ret -ne 1 ]]; then
