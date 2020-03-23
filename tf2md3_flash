@@ -5,20 +5,36 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 
-if [[ ! -f $2 ]]; then
-  echo "$2 does not exist" 1>&2
+device=$1
+firmware=$2
+
+if [[ ! -f ${firmware} ]]; then
+  echo "${firmware} does not exist" 1>&2
   exit 1
 fi
 
-if [[ ! -a $1 ]]; then
-  echo "$1 does not exist" 1>&2
+if [[ ! -a ${device} ]]; then
+  echo "${device} does not exist" 1>&2
   exit 1
 fi
+
+shift 2
 
 skip_erase=no
-if [ x$3 = "x--erased" ]; then
-  skip_erase=yes
-fi
+reset=no
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    "--erased")
+      skip_erase=yes;;
+    "--reset")
+      reset=yes;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1;;
+  esac
+  shift
+done
 
 wait_ret(){
   while read -t 1.5 retval; do
@@ -35,25 +51,25 @@ wait_echo(){
 }
 
 
-if [ x$skip_erase = "xno" ]; then
+if [ ${skip_erase} = "no" ]; then
   echo "Erasing flash..."
-  stty -F $1 raw -echo
-  echo '' > $1
-  while read -t 1 ret < $1; do sleep 0; done
+  stty -F ${device} raw -echo
+  echo > ${device}
+  while read -t 1 ret < ${device}; do sleep 0; done
 
-  wait_ret $1 & pid=$!
-  wait_echo 0.5 '$FLASHERACEA' $1 &
+  wait_ret ${device} & pid=$!
+  wait_echo 0.5 '$FLASHERACEA' ${device} &
   wait $pid
   ret=$?
   if [[ $ret -ne 1 ]]; then
     echo "Failed to erase flash ($ret)" 1>&2
     echo "If the flash is already erased, please try " 1>&2
-    echo " $0 $1 $2 --erased" 1>&2
+    echo " $0 ${device} ${firmware} --erased" 1>&2
     exit 1
   fi
 
-  wait_ret $1 & pid=$!
-  wait_echo 0.5 '$FLASHERACEB' $1 &
+  wait_ret ${device} & pid=$!
+  wait_echo 0.5 '$FLASHERACEB' ${device} &
   wait $pid
   ret=$?
   if [[ $ret -ne 1 ]]; then
@@ -69,11 +85,20 @@ fi
 
 echo "Writing firmware..."
 cat <<EOD > /tmp/.samba_cmd.tmp
-flash 0x00100000 $2
+flash 0x00100000 ${firmware}
 nvm 4
 EOD
 
-samba -i $1 --source=/tmp/.samba_cmd.tmp
+samba -i ${device} --source=/tmp/.samba_cmd.tmp
 
 rm /tmp/.samba_cmd.tmp
 
+if [ ${reset} = "yes" ]; then
+  echo "Resetting MCU..."
+  cat <<EOD > /tmp/.samba_reset.tmp
+reset
+EOD
+  samba -i ${device} --source=/tmp/.samba_reset.tmp
+
+  rm /tmp/.samba_reset.tmp
+fi
