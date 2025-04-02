@@ -79,6 +79,12 @@ if [ ${skip_erase} = "no" ]; then
 
   echo "Flash erased"
   sleep 2
+  for i in 1 2 3; do
+    if [ -e ${device} ]; then
+      break
+    fi
+    sleep 1
+  done
 else
   echo "Flash erase skipped"
 fi
