@@ -90,8 +90,13 @@ nvm 4
 EOD
 
 samba -i ${device} --source=/tmp/.samba_cmd.tmp
-
+ret=$?
 rm /tmp/.samba_cmd.tmp
+
+if [[ $ret -ne 0 ]]; then
+  echo "Failed to write firmware ($ret)" 1>&2
+  exit 1
+fi
 
 if [ ${reset} = "yes" ]; then
   echo "Resetting MCU..."
@@ -99,6 +104,11 @@ if [ ${reset} = "yes" ]; then
 reset
 EOD
   samba -i ${device} --source=/tmp/.samba_reset.tmp
-
+  ret=$?
   rm /tmp/.samba_reset.tmp
+
+  if [[ $ret -ne 0 ]]; then
+    echo "Failed to reset MCU ($ret)" 1>&2
+    exit 1
+  fi
 fi
